@@ -1,0 +1,9 @@
+easydict
+ipykernel
+numpy
+matplotlib
+open3d
+pillow
+pypcd4
+scipy
+sympy
