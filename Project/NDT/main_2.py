@@ -80,8 +80,8 @@ def compare_transformations(computed, ground_truth):
     gt_transform[:3, :3] = rotation_gt
     gt_transform[:3, 3] = translation_gt
     
-    print("Ground Truth Transformation Matrix:\n", gt_transform)
-    print("Difference in Transformation:\n", computed - gt_transform)
+    # print("Ground Truth Transformation Matrix:\n", gt_transform)
+    # print("Difference in Transformation:\n", computed - gt_transform)
     
 ### NDT Registration ###
 def ndt_registration(source_points, voxel_mean, voxel_covariance, voxel_size, min_bounds, max_iterations=30, tolerance=1e-6):
@@ -146,6 +146,7 @@ voxel_mean, voxel_covariance = compute_gaussian_distributions(map_points, voxel_
 # Placeholder for initial transformation (identity)
 initial_transformation = np.eye(4)
 
+merged_pcd = o3d.geometry.PointCloud()
 # Loop through all frames
 for i, frame_file in enumerate(frames_dir):
     frame_pcd = load_point_cloud(os.path.join(dataset_dir, 'frames', frame_file))
@@ -154,6 +155,11 @@ for i, frame_file in enumerate(frames_dir):
     start_time = time.time()
     transformation = ndt_registration(frame_points, voxel_mean, voxel_covariance, voxel_size, min_bounds)
     end_time = time.time()
+    
+    aligned_filename = os.path.join(dataset_dir, 'aligned_frames', f'aligned_{frame_file}.pcd')
+    frame_pcd.transform(transformation)
+    merged_pcd += frame_pcd
+
     
     # Calculate lateral error (example calculation)
     gt_transform = ground_truth.iloc[i]
@@ -175,4 +181,9 @@ for i, frame_file in enumerate(frames_dir):
     # Optional: Compare transformations
     compare_transformations(transformation, gt_transform)
 
-print("Completed processing all frames.")
+# Optional: Voxel downsample the merged point cloud to reduce noise and size
+merged_pcd = merged_pcd.voxel_down_sample(voxel_size=0.05)
+
+# Save the merged point cloud
+merged_filename = os.path.join(dataset_dir, 'merged_map.pcd')
+o3d.io.write_point_cloud(merged_filename, merged_pcd)
