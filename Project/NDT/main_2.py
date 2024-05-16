@@ -34,25 +34,35 @@ def compute_gaussian_distributions(points, voxel_indices):
 
 ### Rotation Matrix from RPY ###
 def rpy_to_rotation_matrix(roll, pitch, yaw):
-    R_x = np.array([
-        [1, 0, 0],
-        [0, np.cos(roll), -np.sin(roll)],
-        [0, np.sin(roll), np.cos(roll)]
-    ])
-    
-    R_y = np.array([
-        [np.cos(pitch), 0, np.sin(pitch)],
-        [0, 1, 0],
-        [-np.sin(pitch), 0, np.cos(pitch)]
-    ])
-    
+    # Calculate cosines and sines
+    cy = np.cos(yaw)
+    sy = np.sin(yaw)
+    cp = np.cos(pitch)
+    sp = np.sin(pitch)
+    cr = np.cos(roll)
+    sr = np.sin(roll)
+
+    # Create rotation matrices
     R_z = np.array([
-        [np.cos(yaw), -np.sin(yaw)],
-        [np.sin(yaw), np.cos(yaw)],
+        [cy, -sy, 0],
+        [sy, cy, 0],
         [0, 0, 1]
     ])
-    
-    R = R_z @ R_y @ R_x
+
+    R_y = np.array([
+        [cp, 0, sp],
+        [0, 1, 0],
+        [-sp, 0, cp]
+    ])
+
+    R_x = np.array([
+        [1, 0, 0],
+        [0, cr, -sr],
+        [0, sr, cr]
+    ])
+
+    # Combine rotations
+    R = np.dot(R_z, np.dot(R_y, R_x))
     return R
 
 ### Voxelization ###
