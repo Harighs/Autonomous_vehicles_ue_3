@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation as R
 import pandas as pd
 import os
 
-#
+# #
 # Paths
 map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Localization_Project/localization/dataset/map.pcd"
 frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Localization_Project/localization/dataset/frames"
@@ -97,6 +97,6 @@ o3d.io.write_point_cloud("aligned_car.pcd", merged_cloud)
 # # ######################################################### End of solution #########################################################
 
 # After saving the aligned point cloud, you can visualize it using the following code:
-# pcd = o3d.io.read_point_cloud("/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Localization_Project/localization/Project/ICP/aligned_car.pcd")
-# o3d.visualization.draw_geometries([pcd])
+pcd = o3d.io.read_point_cloud("/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/Project/ICP/aligned_car.pcd")
+o3d.visualization.draw_geometries([pcd])
 
