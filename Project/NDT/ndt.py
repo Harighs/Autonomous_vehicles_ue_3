@@ -89,8 +89,8 @@ class Cell:
             self.mean = np.mean(points[:, :2], axis=0)
             self.cov = np.cov(points[:, :2].T)
 
-            print('cov is :', self.cov)
-            print('mean is :', self.mean)
+            # print('cov is :', self.cov)
+            # print('mean is :', self.mean)
 
             self.rv = multivariate_normal(self.mean, self.cov)
 
@@ -509,91 +509,8 @@ class NDT:
 map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/map.pcd"
 frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/frames"
 ground_truth_path = '/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/ground_truth.csv'
-#
-# # Load the point cloud
-# map_cloud = o3d.io.read_point_cloud(map_path)
-#
-# # Load ground truth data
-# ground_truth = pd.read_csv(ground_truth_path)
-#
-# # Initialize lists
-# extracted_cars = []
-#
-# for i in range(len(ground_truth)):
-#     frame_file = os.path.join(frames_path, f"frame_{i}.pcd")
-#
-#     if not os.path.exists(frame_file):
-#         print(f"Frame file {frame_file} not found.")
-#         continue
-#
-#     frame_cloud = o3d.io.read_point_cloud(frame_file)
-#     frame_cloud_down = frame_cloud.voxel_down_sample(voxel_size=1)
-#
-#     # Ground truth transformation
-#     x, y, z = ground_truth.iloc[i][1:4]
-#     roll, pitch, yaw = np.deg2rad(ground_truth.iloc[i][4:7])
-#
-#     r = R.from_euler('xyz', [roll, pitch, yaw])
-#     rotation_matrix = r.as_matrix()
-#     translation_vector = np.array([x, y, z])
-#     transformation_matrix = np.eye(4)
-#     transformation_matrix[:3, :3] = rotation_matrix
-#     transformation_matrix[:3, 3] = translation_vector
-#
-#     frame_cloud_down.transform(transformation_matrix)
-#     extracted_cars.append(frame_cloud_down)
-#
-#
-# # Initialize Pose
-# init_pose = Pose(0, 0, 0)  # Make a good initial guess
-#
-# # Create NDT object
-# ndt = NDT(15, 15)  # Adjust grid resolution if necessary
-#
-# # Set input cloud to populate grids
-# target_pcd = np.asarray(map_cloud.points)
-# ndt.set_input_cloud(target_pcd)
-#
-# # Initialize lists for timing and errors
-# time_rec = []
-# lateral_err = []
-#
-# for i, car_cloud in enumerate(extracted_cars):
-#     start_time = time.time()
-#
-#     source_pcd = np.asarray(car_cloud.points)
-#     pose, cache_list = ndt.align(source_pcd, init_pose, max_iterations=15, eps=1e-3)
-#
-#     end_time = time.time()
-#     time_rec.append(end_time - start_time)
-#
-#     # Evaluate registration error
-#     transformed_points = pose.get_transformation()[0] @ source_pcd[:, :2].T + pose.get_transformation()[1]
-#     transformed_points = transformed_points.T
-#     reg_error = np.mean(np.linalg.norm(transformed_points - target_pcd[:, :2], axis=1))
-#     lateral_err.append(reg_error)
-#
-#     if reg_error > 1.2:
-#         print(f"Lateral error ({reg_error:.2f} m) is greater than the maximum allowed (1.2 m).")
-#         break
-#
-#     print(f"Processed {i + 1}/{len(extracted_cars)} frames.")
-#
-# # Results
-# print(f"----->>>>>>>>>>  Mean time per frame: {np.mean(time_rec):.2f} s")
-# print(f"----->>>>>>>>>>  Mean lateral error: {np.mean(lateral_err):.2f} m")
-#
-# # Save the aligned car point clouds
-# merged_cloud = map_cloud
-# for car_cloud in extracted_cars:
-#     merged_cloud += car_cloud
-#
-# o3d.io.write_point_cloud("aligned_car_ndt.pcd", merged_cloud)
 
 
-
-
-## currently working solution
 # Load the point cloud
 map_cloud = o3d.io.read_point_cloud(map_path)
 
@@ -612,7 +529,7 @@ for i in range(len(ground_truth)):
         continue
 
     frame_cloud = o3d.io.read_point_cloud(frame_file)
-    frame_cloud_down = frame_cloud.voxel_down_sample(voxel_size=0.2)
+    frame_cloud_down = frame_cloud.voxel_down_sample(voxel_size=0.5)
 
     # Ground truth transformation
     x, y, z = ground_truth.iloc[i][1:4]
@@ -645,17 +562,20 @@ lateral_err = []
 # Create a KDTree for the target point cloud
 target_kdtree = o3d.geometry.KDTreeFlann(map_cloud)
 
+# Use pose from the previous iteration as the starting point for the next iteration
+current_pose = init_pose
+
 for i, car_cloud in enumerate(extracted_cars):
     start_time = time.time()
 
     source_pcd = np.asarray(car_cloud.points)
-    pose, cache_list = ndt.align(source_pcd, init_pose, max_iterations=15, eps=1e-3)
+    current_pose, cache_list = ndt.align(source_pcd, current_pose, max_iterations=15, eps=1e-3)
 
     end_time = time.time()
     time_rec.append(end_time - start_time)
 
     # Transform the source point cloud using the calculated pose
-    R, t = pose.get_transformation()
+    R, t = current_pose.get_transformation()
     transformed_points = R @ source_pcd[:, :2].T + t
     transformed_points = transformed_points.T
 
@@ -673,6 +593,7 @@ for i, car_cloud in enumerate(extracted_cars):
 
     if reg_error > 1.2:
         print(f"Lateral error ({reg_error:.2f} m) is greater than the maximum allowed (1.2 m).")
+        # break
 
     print(f"Processed {i + 1}/{len(extracted_cars)} frames.")
 
@@ -681,12 +602,12 @@ print(f"----->>>>>>>>>>  Mean time per frame: {np.mean(time_rec):.2f} s")
 print(f"----->>>>>>>>>>  Mean lateral error: {np.mean(lateral_err):.2f} m")
 
 # Save the aligned car point clouds
-merged_cloud = map_cloud
+merged_aligned_cars = o3d.geometry.PointCloud()
 for car_cloud in extracted_cars:
-    merged_cloud += car_cloud
+    merged_aligned_cars += car_cloud
+o3d.io.write_point_cloud("aligned_car_ndt.pcd", merged_aligned_cars)
 
-o3d.io.write_point_cloud("aligned_car_ndt.pcd", merged_cloud)
-#
-# # Visualize the results
-# pcd = o3d.io.read_point_cloud("/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/Project/ICP/aligned_car.pcd")
-# o3d.visualization.draw_geometries([pcd])
+# Visualize the results
+import open3d as o3d
+pcd = o3d.io.read_point_cloud("/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/Project/NDT/aligned_car_ndt.pcd")
+o3d.visualization.draw_geometries([pcd])
