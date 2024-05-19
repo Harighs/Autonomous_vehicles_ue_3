@@ -11,38 +11,41 @@ from typing import Tuple, List
 
 class Pose:
     """
-    Pose class
+    Pose class for 3D transformations
     """
 
-    def __init__(self, x: float, y: float, yaw: float):
+    def __init__(self, x: float, y: float, z: float, roll: float, pitch: float, yaw: float):
         """
         Constructor of the class
 
         Args:
             x (float): X offset of the pose
             y (float): Y offset of the pose
+            z (float): Z offset of the pose
+            roll (float): Roll angle of the pose
+            pitch (float): Pitch angle of the pose
             yaw (float): Yaw angle of the pose
         """
         self.x = x
         self.y = y
+        self.z = z
+        self.roll = roll
+        self.pitch = pitch
         self.yaw = yaw
 
-    def get_transformation(self) -> Tuple[np.array, np.array]:
+    def get_transformation(self) -> np.array:
         """
-        Method to obtain the Rotation matrix and translation
-        vector of a given pose.
+        Method to obtain the transformation matrix of a given pose.
 
         Returns:
-            Tuple[np.array, np.array]: Rotation as a 2x2 matrix
-                                       translation vector as 2x1 matrix
+            np.array: 4x4 transformation matrix
         """
-        x = self.x
-        y = self.y
-        yaw = self.yaw
-        R = np.asarray([[np.cos(yaw), -np.sin(yaw)],
-                        [np.sin(yaw), np.cos(yaw)]])
-        t = np.asarray([[x], [y]])
-        return R, t
+        R_matrix = R.from_euler('xyz', [self.roll, self.pitch, self.yaw]).as_matrix()
+        t_vector = np.array([self.x, self.y, self.z]).reshape((3, 1))
+        transformation = np.eye(4)
+        transformation[:3, :3] = R_matrix
+        transformation[:3, 3] = t_vector.flatten()
+        return transformation
 
     def __add__(self, other):
         """
@@ -51,18 +54,20 @@ class Pose:
             other (Pose): Pose to add
 
         Returns:
-            Pose: new pose that represents the addition
-                  of two poses.
+            Pose: new pose that represents the addition of two poses.
         """
         x = self.x + other.x
         y = self.y + other.y
+        z = self.z + other.z
+        roll = self.roll + other.roll
+        pitch = self.pitch + other.pitch
         yaw = self.yaw + other.yaw
-        return Pose(x, y, yaw)
+        return Pose(x, y, z, roll, pitch, yaw)
 
 
 class Cell:
     """
-    Cell implementation for and NDT grid
+    Cell implementation for a NDT grid in 3D
     """
 
     def __init__(self):
@@ -70,8 +75,8 @@ class Cell:
         Constructor by default, the cell is empty.
         with 0 mean and zero covariance.
         """
-        self.mean = np.zeros((2, 1))
-        self.cov = np.zeros((2, 2))
+        self.mean = np.zeros((3, 1))
+        self.cov = np.zeros((3, 3))
         self.rv = None
         self.points = []
 
@@ -86,13 +91,8 @@ class Cell:
         """
         self.points = points
         if len(points) > 0:
-            self.mean = np.mean(points[:, :2], axis=0)
-            self.cov = np.cov(points[:, :2].T)
-
-            # print('cov is :', self.cov)
-            # print('mean is :', self.mean)
-
-            self.rv = multivariate_normal(self.mean, self.cov)
+            self.mean = np.mean(points[:, :3], axis=0)
+            self.cov = np.cov(points[:, :3].T)
 
             epsilon = 1e-5
             if np.any(np.diag(self.cov) == 0):
@@ -107,12 +107,11 @@ class Cell:
         Probability that a given point lies on the given cell.
 
         Args:
-            point (np.array): (x,y) point to calculate the probability.
+            point (np.array): (x,y,z) point to calculate the probability.
 
         Returns:
             float: probability.
         """
-
         if self.mean is None:
             return 0.0
         else:
@@ -122,106 +121,123 @@ class Cell:
 
 class NDT:
     """
-    Normal distribution class.
-
-    This class performs all the required functions needed to perform the aligment of
-    an scan to a map.
+    Normal Distributions Transform class for 3D point cloud alignment
     """
 
-    def __init__(self, x_step: float, y_step: float, ylim: Tuple[int, int] = None, xlim: Tuple[int, int] = None):
+    def __init__(self, x_step: float, y_step: float, z_step: float, xlim: Tuple[int, int] = None, ylim: Tuple[int, int] = None, zlim: Tuple[int, int] = None):
         """
         Constructor
         Args:
             x_step (float): Resolution of the grid in x direction
             y_step (float): Resolution of the grid in y direction
-            ylim (Tuple[int, int], optional): limits of our grid in y direction. Defaults to None.
+            z_step (float): Resolution of the grid in z direction
             xlim (Tuple[int, int], optional): limits of our grid in x direction. Defaults to None.
+            ylim (Tuple[int, int], optional): limits of our grid in y direction. Defaults to None.
+            zlim (Tuple[int, int], optional): limits of our grid in z direction. Defaults to None.
         """
         self.x_step = x_step
         self.y_step = y_step
+        self.z_step = z_step
         self.xlim = xlim
         self.ylim = ylim
+        self.zlim = zlim
         self.grid = None
         self.bbox = None
 
     def set_input_cloud(self, pcd: np.array) -> None:
         """
-        Method to populate the NDT grid given a input point cloud. It is in charge to calculate the
+        Method to populate the NDT grid given an input point cloud. It is in charge to calculate the
         cell that each point belongs to and populate each cell.
 
         Args:
-            pcd (np.array): pointcloud with shape (n_points,3)
+            pcd (np.array): pointcloud with shape (n_points, 3)
         """
-
-        x_min_pcd, y_min_pcd = np.min(pcd[:, :2], axis=0) - 1
-        x_max_pcd, y_max_pcd = np.max(pcd[:, :2], axis=0) + 1
+        x_min_pcd, y_min_pcd, z_min_pcd = np.min(pcd[:, :3], axis=0) - 1
+        x_max_pcd, y_max_pcd, z_max_pcd = np.max(pcd[:, :3], axis=0) + 1
 
         if self.xlim is None:
             self.xlim = [x_min_pcd, x_max_pcd]
         if self.ylim is None:
             self.ylim = [y_min_pcd, y_max_pcd]
+        if self.zlim is None:
+            self.zlim = [z_min_pcd, z_max_pcd]
 
         x_min, x_max = self.xlim
         y_min, y_max = self.ylim
+        z_min, z_max = self.zlim
 
         num_voxels_x = int(np.ceil((x_max - x_min) / self.x_step))
         num_voxels_y = int(np.ceil((y_max - y_min) / self.y_step))
+        num_voxels_z = int(np.ceil((z_max - z_min) / self.z_step))
+
         xs = np.linspace(x_min, x_max, num_voxels_x)
         ys = np.linspace(y_min, y_max, num_voxels_y)
+        zs = np.linspace(z_min, z_max, num_voxels_z)
 
-        self.grid = [[Cell() for _ in range(num_voxels_x - 1)] for _ in range(num_voxels_y - 1)]
-        self.bbox = [(x_min, y_min), (x_max, y_max)]
-        for i in range(len(ys) - 1):
-            for j in range(len(xs) - 1):
-                mask = np.where((pcd[:, 0] >= xs[j]) &
-                                (pcd[:, 0] <= xs[j + 1]) &
-                                (pcd[:, 1] >= ys[i]) &
-                                (pcd[:, 1] <= ys[i + 1]))
+        self.grid = [[[Cell() for _ in range(num_voxels_x - 1)] for _ in range(num_voxels_y - 1)] for _ in range(num_voxels_z - 1)]
+        self.bbox = [(x_min, y_min, z_min), (x_max, y_max, z_max)]
 
-                q = pcd[mask]
-                self.grid[i][j].set_points(q)
+        for i in range(len(zs) - 1):
+            for j in range(len(ys) - 1):
+                for k in range(len(xs) - 1):
+                    mask = np.where((pcd[:, 0] >= xs[k]) &
+                                    (pcd[:, 0] <= xs[k + 1]) &
+                                    (pcd[:, 1] >= ys[j]) &
+                                    (pcd[:, 1] <= ys[j + 1]) &
+                                    (pcd[:, 2] >= zs[i]) &
+                                    (pcd[:, 2] <= zs[i + 1]))
+
+                    q = pcd[mask]
+                    self.grid[i][j][k].set_points(q)
 
     def get_cell(self, point: np.array) -> Cell:
-        x_min, x_max = self.xlim
-        y_min, y_max = self.ylim
-        width = int(np.ceil((x_max - x_min) / self.x_step)) - 1
-        height = int(np.ceil((y_max - y_min) / self.y_step)) - 1
-        if not (self.x_step > 0 and self.y_step > 0):
-            raise ValueError("Grid step sizes must be positive")
-        c = int((point[0] - x_min) / self.x_step) if not np.isnan(point[0]) else None
-        r = int((point[1] - y_min) / self.y_step) if not np.isnan(point[1]) else None
-        if c is None or r is None or c < 0 or c >= width or r < 0 or r >= height:
-            return None
-        return self.grid[r][c]
-
-
-    def align(self, pcd: np.array, init_pose: Pose, max_iterations: int = 100, eps: float = 1e-3) -> Tuple[
-        Pose, List[Tuple[np.array, np.array, float]]]:
         """
-        Principal method that aligns a given pointcloud with the pointcloud that
-        was used to populate the NDT grid.
+        Returns the cell that point belongs to.
 
         Args:
-            pcd (np.array): Pointcloud to be aligned.
-            init_pose (_type_): Estimated initial pose.
-            max_iterations (int, optional): Maximum number of iterations to calculate the aligment. Defaults to 100.
-            eps (_type_, optional): Threshold criteria to check if the algorithm has converged to a solution. Defaults to 1e-3.
+            point (np.array): query point which we want to know the cell
 
         Returns:
-            Tuple[Pose, List[np.array, np.array, float]]: - Pose between the pointcloud and the map.
-                                                          - List of [Rotation, translation, score] in each iteration for animation
-                                                            porpuses.
+            Cell: Cell where the point is located.
+        """
+        x_min, x_max = self.xlim
+        y_min, y_max = self.ylim
+        z_min, z_max = self.zlim
+        width = int(np.ceil((x_max - x_min) / self.x_step)) - 1
+        height = int(np.ceil((y_max - y_min) / self.y_step)) - 1
+        depth = int(np.ceil((z_max - z_min) / self.z_step)) - 1
+
+        c = int((point[0] - x_min) / self.x_step)
+        r = int((point[1] - y_min) / self.y_step)
+        d = int((point[2] - z_min) / self.z_step)
+
+        if (c >= 0 and c < width) and (r >= 0 and r < height) and (d >= 0 and d < depth):
+            return self.grid[d][r][c]
+        else:
+            return None
+
+    def align(self, pcd: np.array, init_pose: Pose, max_iterations: int = 100, eps: float = 1e-3) -> Tuple[Pose, List[Tuple[np.array, np.array, float]]]:
+        """
+        Principal method that aligns a given point cloud with the point cloud that was used to populate the NDT grid.
+
+        Args:
+            pcd (np.array): Point cloud to be aligned.
+            init_pose (Pose): Estimated initial pose.
+            max_iterations (int, optional): Maximum number of iterations to calculate the alignment. Defaults to 100.
+            eps (float, optional): Threshold criteria to check if the algorithm has converged to a solution. Defaults to 1e-3.
+
+        Returns:
+            Tuple[Pose, List[Tuple[np.array, np.array, float]]]: - Pose between the point cloud and the map.
+                                                                  - List of [Rotation, translation, score] in each iteration for animation purposes.
         """
         pose = init_pose
         cache_list = []
         for iteration in range(max_iterations):
-
-            R, t = pose.get_transformation()
-            transformed_pcd = R @ pcd[:, :2].T + t
-            transformed_pcd = transformed_pcd.T
+            transformation_matrix = pose.get_transformation()
+            transformed_pcd = (transformation_matrix[:3, :3] @ pcd[:, :3].T + transformation_matrix[:3, 3].reshape(3, 1)).T
 
             score = self.calculate_score(transformed_pcd)
-            cache_list.append((R, t, score))
+            cache_list.append((transformation_matrix[:3, :3], transformation_matrix[:3, 3], score))
 
             delta_T = self.newtons_method(transformed_pcd, pose)
 
@@ -229,33 +245,32 @@ class NDT:
 
             pose.x += alpha * delta_T[0, 0]
             pose.y += alpha * delta_T[1, 0]
-            pose.yaw += alpha * delta_T[2, 0]
-
-            if pose.yaw > 2 * np.pi:
-                n = np.floor(pose.yaw / 2 * np.pi)
-                pose.yaw -= n * (2 * np.pi)
+            pose.z += alpha * delta_T[2, 0]
+            pose.roll += alpha * delta_T[3, 0]
+            pose.pitch += alpha * delta_T[4, 0]
+            pose.yaw += alpha * delta_T[5, 0]
 
         return pose, cache_list
 
     def newtons_method(self, pcd: np.array, pose: Pose) -> np.array:
         """
-        Implementation of one step of the newtons method, with the equations given in class
+        Implementation of one step of Newton's method, with the equations given in class
 
         Args:
-            pcd (np.array): Pointcloud to calculate the newtons method.
+            pcd (np.array): Point cloud to calculate Newton's method.
 
         Returns:
-            np.array: vector with the change of the parameters (delta_tx,delta_ty,delta_yaw)
+            np.array: vector with the change of the parameters (delta_tx, delta_ty, delta_tz, delta_roll, delta_pitch, delta_yaw)
         """
-        gradient = np.zeros((1, 3))
-        H = np.zeros((3, 3))
+        gradient = np.zeros((1, 6))
+        H = np.zeros((6, 6))
         for point in pcd:
             cell = self.get_cell(point)
 
             if cell is None or len(cell.points) <= 2:
                 continue
-            point = np.reshape(point[:2], (1, 2))
-            delta_g, delta_H = self.gradient_jacobian_point(point, pose.yaw, cell)
+            point = np.reshape(point[:3], (1, 3))
+            delta_g, delta_H = self.gradient_jacobian_point(point, pose, cell)
             gradient = gradient + delta_g
             H = H + delta_H
 
@@ -263,127 +278,105 @@ class NDT:
         delta_T = -np.linalg.inv(H) @ gradient.T
         return delta_T
 
-    def gradient_jacobian_point(self, point: np.array, theta: float, cell: Cell) -> Tuple[np.array, np.array]:
+    def gradient_jacobian_point(self, point: np.array, pose: Pose, cell: Cell) -> Tuple[np.array, np.array]:
         """
-        Helper function to calculate the jacobian and hessian for a given point.
+        Helper function to calculate the Jacobian and Hessian for a given point.
 
         Args:
             point (np.array): Point used to calculate one summand of the score
-            theta (float): yaw angle of the current pose.
+            pose (Pose): current pose.
             cell (Cell): cell where the point belongs to.
 
         Returns:
             Tuple[np.array, np.array]: - delta_gradient: The gradient calculated with the input point
-                                       - delta_H: The hessian calculated with the given point.
+                                       - delta_H: The Hessian calculated with the given point.
         """
         mean = cell.mean
         cov = cell.cov
         cov_inv = np.linalg.inv(cov)
         q = point - mean
         expo = np.exp(-0.5 * (q @ cov_inv @ q.T))
-        J = self.calculate_jacobian(point, theta)
+        J = self.calculate_jacobian(point, pose)
         delta_gradient = (q @ cov_inv @ J) * expo
-        delta_H = self.calculate_hessian(point, theta, cell, J)
+        delta_H = self.calculate_hessian(point, pose, cell, J)
         return delta_gradient, delta_H
 
-    def calculate_jacobian(self, point: np.array, theta: float) -> np.array:
+    def calculate_jacobian(self, point: np.array, pose: Pose) -> np.array:
         """
-        Calculate the jacobian of the score given a point and the angle of its pose
+        Calculate the Jacobian of the score given a point and the angle of its pose
 
         Args:
-            point (np.array): Point used to calculate the jacobian
-            theta (float): Angle of the pose.
+            point (np.array): Point used to calculate the Jacobian
+            pose (Pose): current pose.
 
         Returns:
-            np.array: Calculated Jacobian. Please see the equations given in the lesson.
+            np.array: Calculated Jacobian.
         """
         x = point[:, 0].item()
         y = point[:, 1].item()
-        J = np.zeros((2, 3))
-        J[0, 0] = 1.0
-        J[1, 1] = 1.0
-        J[0, 2] = -x * np.sin(theta) - y * np.cos(theta)
-        J[1, 2] = x * np.cos(theta) - y * np.sin(theta)
+        z = point[:, 2].item()
+        roll = pose.roll
+        pitch = pose.pitch
+        yaw = pose.yaw
+        J = np.zeros((3, 6))
+        J[:3, :3] = np.eye(3)
+        J[0, 3] = -x * np.sin(roll) - y * np.cos(roll) * np.sin(pitch) + z * np.cos(roll) * np.cos(pitch)
+        J[1, 3] = x * np.cos(roll) - y * np.sin(roll) * np.sin(pitch) + z * np.sin(roll) * np.cos(pitch)
+        J[2, 3] = -y * np.cos(pitch) - z * np.sin(pitch)
+        J[0, 4] = y * np.sin(roll) - z * np.cos(roll)
+        J[1, 4] = -x * np.sin(roll) + z * np.sin(roll)
+        J[2, 4] = -x * np.cos(roll) - y * np.sin(roll)
+        J[0, 5] = -y * np.sin(pitch) - z * np.cos(pitch)
+        J[1, 5] = x * np.sin(pitch) - z * np.cos(pitch)
+        J[2, 5] = x * np.cos(pitch) + y * np.sin(pitch)
         return J
 
-    def calculate_hessian(self, point: np.array, theta: float, cell: Cell, J: np.array) -> np.array:
+    def calculate_hessian(self, point: np.array, pose: Pose, cell: Cell, J: np.array) -> np.array:
         """
         Helper function to calculate the Hessian matrix of a given point.
 
         Args:
-            point (np.array): Point used to calculate part of the hessian
-            theta (float): Angle of the pose.
+            point (np.array): Point used to calculate part of the Hessian
+            pose (Pose): current pose.
             cell (Cell): Cell that the point belongs to.
-            J (np.array): Jacobian of the score using the point and theta
+            J (np.array): Jacobian of the score using the point and pose
 
         Returns:
-            np.array: Calculated Hessian. Please see the equations given in the lesson.
+            np.array: Calculated Hessian.
         """
         x = point[:, 0].item()
         y = point[:, 1].item()
+        z = point[:, 2].item()
         mean = cell.mean
         cov = cell.cov
         cov_inv = np.linalg.inv(cov)
         q = point - mean
         expo = np.exp(-0.5 * (q @ cov_inv @ q.T))
 
-        dq2 = np.zeros((2, 3))
-        dq2[0, 2] = -x * np.cos(theta) + y * np.sin(theta)
-        dq2[1, 2] = -x * np.sin(theta) - y * np.cos(theta)
+        dq2 = np.zeros((3, 6))
+        dq2[0, 3] = -x * np.cos(pose.roll) + y * np.sin(pose.roll) * np.sin(pose.pitch) - z * np.sin(pose.roll) * np.cos(pose.pitch)
+        dq2[1, 3] = -x * np.sin(pose.roll) - y * np.cos(pose.roll) * np.sin(pose.pitch) + z * np.cos(pose.roll) * np.cos(pose.pitch)
+        dq2[2, 3] = y * np.cos(pose.pitch) + z * np.sin(pose.pitch)
 
         H1 = (-q @ cov_inv @ J).T @ (-q @ cov_inv @ J)
-        H2 = (-q @ cov_inv @ dq2).T @ np.asarray([[0, 0, 1]])
+        H2 = (-q @ cov_inv @ dq2).T @ np.array([[0, 0, 0, 1, 1, 1]])
         H3 = -J.T @ cov_inv @ J
         H = -expo * (H1 + H2 + H3)
-
-        # other implementation easier to understand
-        # q1 = np.reshape(J[:,0],(2,1))
-        # q2 = np.reshape(J[:,1],(2,1))
-        # q3 = np.reshape(J[:,2],(2,1))
-
-        # H1[0,0] = (-q@cov_inv@q1)@(-q@cov_inv@q1)
-        # H1[0,1] = (-q@cov_inv@q1)@(-q@cov_inv@q2)
-        # H1[0,2] = (-q@cov_inv@q1)@(-q@cov_inv@q3)
-        # H1[1,0] = (-q@cov_inv@q2)@(-q@cov_inv@q1)
-        # H1[1,1] = (-q@cov_inv@q2)@(-q@cov_inv@q2)
-        # H1[1,2] = (-q@cov_inv@q2)@(-q@cov_inv@q3)
-        # H1[2,0] = (-q@cov_inv@q3)@(-q@cov_inv@q1)
-        # H1[2,1] = (-q@cov_inv@q3)@(-q@cov_inv@q2)
-        # H1[2,2] = (-q@cov_inv@q3)@(-q@cov_inv@q3)
-
-        # H2 = np.zeros((3,3))
-
-        # H2[0,0] = (-q1.T@cov_inv@q1)
-        # H2[0,1] = (-q2.T@cov_inv@q1)
-        # H2[0,2] = (-q3.T@cov_inv@q1)
-        # H2[1,0] = (-q1.T@cov_inv@q2)
-        # H2[1,1] = (-q2.T@cov_inv@q2)
-        # H2[1,2] = (-q3.T@cov_inv@q2)
-        # H2[2,0] = (-q1.T@cov_inv@q3)
-        # H2[2,1] = (-q2.T@cov_inv@q3)
-        # H2[2,2] = (-q3.T@cov_inv@q3)
-
-        # dq2_33 = np.zeros((2,1))
-        # dq2_33[0,0] = -x*np.cos(theta) + y*np.sin(theta)
-        # dq2_33[1,0] = -x*np.sin(theta) - y*np.cos(theta)
-        # H = H1 + H2
-        # H[2,2] = H[2,2] + -q@cov_inv@dq2_33
-        # H = -expo*H
 
         return H
 
     def pos_definite(self, H: np.array, start: float, increment: float, max_iterations=100) -> np.array:
         """
-        Function to secure that the Matrix H is definite positive.
+        Function to ensure that the Matrix H is positive definite.
 
         Args:
             H (np.array): Hessian matrix that is going to be checked
             start (float): Start lambda that has to be added in case H is not positive definite.
-            increment (_type_): Increment in lamba for each iteration.
+            increment (float): Increment in lambda for each iteration.
             max_iterations (int, optional): Maximum amount of iterations to check if H is positive definite. Defaults to 100.
 
         Returns:
-            np.array: Positive definitie Hessian
+            np.array: Positive definite Hessian
         """
         I = np.eye(H.shape[0])
         pos_H = H + start * I
@@ -400,40 +393,37 @@ class NDT:
 
     def calculate_score(self, points: np.array) -> float:
         """
-        Calculate the score of a given pointcloud
+        Calculate the score of a given point cloud
 
         Args:
-            points (float): pointcloud used to calculate the score.
+            points (np.array): point cloud used to calculate the score.
 
         Returns:
             float: obtained score.
         """
         score = 0
         for point in points:
-            point = point[:2]
-            cell = self.get_cell(point[:2])
+            cell = self.get_cell(point[:3])
             if not cell is None and len(cell.points) > 2:
-                score += cell.pdf(point)
+                score += cell.pdf(point[:3])
         return score
 
     def compute_step_length(self, T: np.array, source: np.array, pose: Pose, curr_score: float) -> float:
         """
-        Euristic way to calculate alpha.
-
-        T -> T + alpha*delta_T
+        Heuristic way to calculate alpha.
 
         Args:
-            T (np.array): delta_T obtained with the newtons method.
-            source (np.array): source pointcloud
+            T (np.array): delta_T obtained with Newton's method.
+            source (np.array): source point cloud
             pose (Pose): current pose
             curr_score (float): current score
 
         Returns:
             float: obtained alpha
         """
-        source = source[:, :2]
+        source = source[:, :3]
         T = T.copy()
-        max_param = max(T[0, 0], max(T[1, 0], T[2, 0]))
+        max_param = max(abs(T[0, 0]), max(abs(T[1, 0]), max(abs(T[2, 0]), max(abs(T[3, 0]), max(abs(T[4, 0]), abs(T[5, 0]))))))
         mlength = 1.0
         if max_param > 0.2:
             mlength = 0.1 / max_param
@@ -443,8 +433,7 @@ class NDT:
 
         # Try smaller steps
         alpha = 1.0
-        for i in range(40):
-            # print("Adjusting alpha smaller")
+        for _ in range(40):
             adj_score = self.adjustment_score(alpha, T, source, pose)
             if adj_score > curr_score:
                 best_alpha = alpha
@@ -454,8 +443,7 @@ class NDT:
         if best_alpha == 0:
             # Try larger steps
             alpha = 2.0
-            for i in range(10):
-                # print("Adjusting alpha bigger")
+            for _ in range(10):
                 adj_score = self.adjustment_score(alpha, T, source, pose)
                 if adj_score > curr_score:
                     best_alpha = alpha
@@ -477,34 +465,30 @@ class NDT:
             float: Obtained score.
         """
         T = T.copy()
-        score = 0
         T *= alpha
-        p_cpy = Pose(0, 0, 0)
+        p_cpy = Pose(0, 0, 0, 0, 0, 0)
         p_cpy = pose + p_cpy
         p_cpy.x += T[0, 0]
         p_cpy.y += T[1, 0]
-        p_cpy.yaw += T[2, 0]
+        p_cpy.z += T[2, 0]
+        p_cpy.roll += T[3, 0]
+        p_cpy.pitch += T[4, 0]
+        p_cpy.yaw += T[5, 0]
 
-        if p_cpy.yaw > 2 * np.pi:
-            n = np.floor(p_cpy.yaw / 2 * np.pi)
-            p_cpy.yaw -= n * (2 * np.pi)
-
-        R, t = p_cpy.get_transformation()
-
-        transformed_scan = R @ source[:, :2].T + t
-        transformed_scan = transformed_scan.T
+        transformation_matrix = p_cpy.get_transformation()
+        transformed_scan = (transformation_matrix[:3, :3] @ source.T + transformation_matrix[:3, 3].reshape(3, 1)).T
 
         return self.calculate_score(transformed_scan)
 
 
-# # Paths
+
+# # Paths 
 # map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/map.pcd"
 map_path = "/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/map.pcd"
 # frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/frames"
 frames_path = "/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/frames"
 # ground_truth_path = '/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/ground_truth.csv'
 ground_truth_path = '/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/ground_truth.csv'
-
 
 # Load the point cloud
 map_cloud = o3d.io.read_point_cloud(map_path)
@@ -541,10 +525,10 @@ for i in range(len(ground_truth)):
     extracted_cars.append(frame_cloud_down)
 
 # Initialize Pose
-init_pose = Pose(0, 0, 0)  # Make a good initial guess
+init_pose = Pose(0, 0, 0, 0, 0, 0)  # Make a good initial guess
 
 # Create NDT object
-ndt = NDT(12, 12)  # Adjust grid resolution if necessary
+ndt = NDT(15, 15, 15)  # Adjust grid resolution if necessary
 
 # Set input cloud to populate grids
 target_pcd = np.asarray(map_cloud.points)
@@ -554,12 +538,10 @@ ndt.set_input_cloud(target_pcd)
 time_rec = []
 lateral_err = []
 
-# Create a KDTree for the target point cloud
-target_kdtree = o3d.geometry.KDTreeFlann(map_cloud)
-
 # Use pose from the previous iteration as the starting point for the next iteration
 current_pose = init_pose
 
+map_cloud_kdtree = o3d.geometry.KDTreeFlann(map_cloud)
 for i, car_cloud in enumerate(extracted_cars):
     start_time = time.time()
 
@@ -570,25 +552,21 @@ for i, car_cloud in enumerate(extracted_cars):
     time_rec.append(end_time - start_time)
 
     # Transform the source point cloud using the calculated pose
-    R, t = current_pose.get_transformation()
-    transformed_points = R @ source_pcd[:, :2].T + t
-    transformed_points = transformed_points.T
-
-    # Convert transformed points to 3D by adding a z-coordinate of 0
-    transformed_points_3d = np.hstack((transformed_points, np.zeros((transformed_points.shape[0], 1))))
-    print('transformed_points_3d:', transformed_points_3d.shape)
+    transformation_matrix = current_pose.get_transformation()
+    transformed_points = (transformation_matrix[:3, :3] @ source_pcd[:, :3].T + transformation_matrix[:3, 3].reshape(3, 1)).T
 
     # Compute the registration error using nearest neighbor distances
     dists = []
-    for point in transformed_points_3d:
-        [_, idx, dist] = target_kdtree.search_knn_vector_3d(point, 1)
+    for point in transformed_points:
+        [_, idx, dist] = map_cloud_kdtree.search_knn_vector_3d(point, 1)
         dists.append(dist[0])
     reg_error = np.mean(dists)
     lateral_err.append(reg_error)
 
+    print('Lateral error is :', reg_error)
     if reg_error > 1.2:
         print(f"Lateral error ({reg_error:.2f} m) is greater than the maximum allowed (1.2 m).")
-        # break
+        break
 
     print(f"Processed {i + 1}/{len(extracted_cars)} frames.")
 
@@ -601,6 +579,8 @@ merged_aligned_cars = o3d.geometry.PointCloud()
 for car_cloud in extracted_cars:
     merged_aligned_cars += car_cloud
 o3d.io.write_point_cloud("aligned_car_ndt.pcd", merged_aligned_cars)
+
+
 
 # Visualize the results
 import open3d as o3d
