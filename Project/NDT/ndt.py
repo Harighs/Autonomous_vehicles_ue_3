@@ -182,26 +182,18 @@ class NDT:
                 self.grid[i][j].set_points(q)
 
     def get_cell(self, point: np.array) -> Cell:
-        """
-        Returns the cell that point belongs to.
-
-        Args:
-            point (np.array): query point which we want to know the cell
-
-        Returns:
-            Cell: Cell where the point is localted.
-        """
-
         x_min, x_max = self.xlim
         y_min, y_max = self.ylim
         width = int(np.ceil((x_max - x_min) / self.x_step)) - 1
         height = int(np.ceil((y_max - y_min) / self.y_step)) - 1
-        c = int((point[0] - x_min) / self.x_step)
-        r = int((point[1] - y_min) / self.y_step)
-        if (c >= 0 and c < width) and (r >= 0 and r < height):
-            return self.grid[r][c]
-        else:
+        if not (self.x_step > 0 and self.y_step > 0):
+            raise ValueError("Grid step sizes must be positive")
+        c = int((point[0] - x_min) / self.x_step) if not np.isnan(point[0]) else None
+        r = int((point[1] - y_min) / self.y_step) if not np.isnan(point[1]) else None
+        if c is None or r is None or c < 0 or c >= width or r < 0 or r >= height:
             return None
+        return self.grid[r][c]
+
 
     def align(self, pcd: np.array, init_pose: Pose, max_iterations: int = 100, eps: float = 1e-3) -> Tuple[
         Pose, List[Tuple[np.array, np.array, float]]]:
@@ -506,9 +498,12 @@ class NDT:
 
 
 # # Paths
-map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/map.pcd"
-frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/frames"
-ground_truth_path = '/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/ground_truth.csv'
+# map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/map.pcd"
+map_path = "/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/map.pcd"
+# frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/frames"
+frames_path = "/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/frames"
+# ground_truth_path = '/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/ground_truth.csv'
+ground_truth_path = '/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/ground_truth.csv'
 
 
 # Load the point cloud
