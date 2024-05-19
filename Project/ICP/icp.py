@@ -1,36 +1,45 @@
 import open3d as o3d
 import numpy as np
-import copy
 import time
-import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
 import pandas as pd
 import os
+from pathlib import Path
+from scipy.spatial.transform import Rotation as R
 
-#
+# User-defined parameters
+VOXEL_SIZE = 0.5
+THRESHOLD = 0.1
+MAXIMUM_ITERATION = 100
+LATERAL_ERROR_MAX = 1.2
+
 # Paths
-map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/map.pcd"
-frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/frames"
-ground_truth_path = '/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/ground_truth.csv'
+root_dir = Path(__file__).parents[2]
+MAP_PATH = root_dir / "dataset/map.pcd"
+FRAMES_PATH = root_dir / "dataset/frames"
+GROUND_TRUTH_PATH = root_dir / "dataset/ground_truth.csv"
+SAVING_PATH = root_dir / "Project/ICP"
 
-# point cloud
-map_cloud = o3d.io.read_point_cloud(map_path)
+# Ensure the saving directory exists
+SAVING_PATH.mkdir(parents=True, exist_ok=True)
 
-# ground truth
-ground_truth = pd.read_csv(ground_truth_path)
+# Load map point cloud
+map_cloud = o3d.io.read_point_cloud(str(MAP_PATH))
+
+# Load ground truth
+ground_truth = pd.read_csv(str(GROUND_TRUTH_PATH))
 
 extracted_cars = []
 
 # Iterate through each frame
 for i in range(len(ground_truth)):
-    frame_file = os.path.join(frames_path, f"frame_{i}.pcd")
+    frame_file = os.path.join(FRAMES_PATH, f"frame_{i}.pcd")
 
     if not os.path.exists(frame_file):
         print(f"Frame file {frame_file} not found.")
         continue
 
     frame_cloud = o3d.io.read_point_cloud(frame_file)
-    frame_cloud_down = frame_cloud.voxel_down_sample(voxel_size=0.5)
+    frame_cloud_down = frame_cloud.voxel_down_sample(voxel_size=VOXEL_SIZE)
 
     # Extract ground truth information
     x, y, z = ground_truth.iloc[i][1:4]
@@ -44,14 +53,9 @@ for i in range(len(ground_truth)):
     transformation_matrix[:3, :3] = rotation_matrix
     transformation_matrix[:3, 3] = translation_vector
 
-    # Apply initial transformation
+    # Initial transformation
     frame_cloud_down.transform(transformation_matrix)
     extracted_cars.append(frame_cloud_down)
-
-# ICP configuration
-threshold = 0.1
-initial_transformation = np.eye(4)
-maximum_iteration = 100
 
 time_rec = []
 lateral_err = []
@@ -62,9 +66,9 @@ for i, car_cloud in enumerate(extracted_cars):
     start_time = time.time()
 
     reg_p2p = o3d.pipelines.registration.registration_icp(
-        car_cloud, map_cloud, threshold, initial_transformation,
+        car_cloud, map_cloud, THRESHOLD, np.eye(4),
         o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=maximum_iteration)
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=MAXIMUM_ITERATION)
     )
 
     end_time = time.time()
@@ -72,20 +76,17 @@ for i, car_cloud in enumerate(extracted_cars):
 
     # Evaluate registration error
     lateral_error = o3d.pipelines.registration.evaluate_registration(
-        car_cloud, map_cloud, threshold, reg_p2p.transformation
+        car_cloud, map_cloud, THRESHOLD, reg_p2p.transformation
     ).inlier_rmse
     lateral_err.append(lateral_error)
 
-    if lateral_error > 1.2:
+    if lateral_error > LATERAL_ERROR_MAX:
         print(f"Lateral error ({lateral_error:.2f} m) is greater than the maximum allowed (1.2 m).")
         break
 
-    # Apply final transformation to car cloud
+    # Final transformation
     car_cloud.transform(reg_p2p.transformation)
     aligned_car_clouds.append(car_cloud)
-
-    # Update initial transformation
-    initial_transformation = reg_p2p.transformation
 
     print(f"Processed {i + 1}/{len(extracted_cars)} frames.")
 
@@ -95,15 +96,12 @@ for car_cloud in aligned_car_clouds:
     merged_aligned_cars += car_cloud
 
 # Save the aligned car point clouds
-o3d.io.write_point_cloud("aligned_car.pcd", merged_aligned_cars)
+o3d.io.write_point_cloud(str(SAVING_PATH / "aligned_car.pcd"), merged_aligned_cars)
 
 # Results
-print(f"----->>>>>>>>>>  Mean time per frame: {np.mean(time_rec):.2f} s")
-print(f"----->>>>>>>>>>  Mean lateral error: {np.mean(lateral_err):.2f} m")
+print(f"-->>  Mean time per frame: {np.mean(time_rec):.2f} s")
+print(f"-->>  Mean lateral error: {np.mean(lateral_err):.2f} m")
 
-# # ######################################################### End of solution #########################################################
-
-# After saving the aligned point cloud, you can visualize it using the following code:
-pcd = o3d.io.read_point_cloud("/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/Project/ICP/aligned_car.pcd")
-o3d.visualization.draw_geometries([pcd])
-
+# Visualization (Optional)
+pcd = o3d.io.read_point_cloud(str(SAVING_PATH))
+# o3d.visualization.draw_geometries([pcd])
