@@ -7,13 +7,11 @@ from scipy.spatial.transform import Rotation as R
 from helper import NDT, Pose
 from scipy.stats import multivariate_normal
 from typing import Tuple, List
+from pathlib import Path
+
 
 
 class Pose:
-    """
-    Pose class for 3D transformations
-    """
-
     def __init__(self, x: float, y: float, z: float, roll: float, pitch: float, yaw: float):
         """
         Constructor of the class
@@ -34,12 +32,6 @@ class Pose:
         self.yaw = yaw
 
     def get_transformation(self) -> np.array:
-        """
-        Method to obtain the transformation matrix of a given pose.
-
-        Returns:
-            np.array: 4x4 transformation matrix
-        """
         R_matrix = R.from_euler('xyz', [self.roll, self.pitch, self.yaw]).as_matrix()
         t_vector = np.array([self.x, self.y, self.z]).reshape((3, 1))
         transformation = np.eye(4)
@@ -48,14 +40,6 @@ class Pose:
         return transformation
 
     def __add__(self, other):
-        """
-        Addition method
-        Args:
-            other (Pose): Pose to add
-
-        Returns:
-            Pose: new pose that represents the addition of two poses.
-        """
         x = self.x + other.x
         y = self.y + other.y
         z = self.z + other.z
@@ -71,24 +55,12 @@ class Cell:
     """
 
     def __init__(self):
-        """
-        Constructor by default, the cell is empty.
-        with 0 mean and zero covariance.
-        """
         self.mean = np.zeros((3, 1))
         self.cov = np.zeros((3, 3))
         self.rv = None
         self.points = []
 
     def set_points(self, points: np.array) -> None:
-        """
-        Method to populate the cell. This method fills the mean and covariance
-        members of the cell
-
-        Args:
-            points (np.array): points that fall in a given cell.
-
-        """
         self.points = points
         if len(points) > 0:
             self.mean = np.mean(points[:, :3], axis=0)
@@ -103,15 +75,6 @@ class Cell:
             self.cov = None
 
     def pdf(self, point: np.array) -> float:
-        """
-        Probability that a given point lies on the given cell.
-
-        Args:
-            point (np.array): (x,y,z) point to calculate the probability.
-
-        Returns:
-            float: probability.
-        """
         if self.mean is None:
             return 0.0
         else:
@@ -145,13 +108,6 @@ class NDT:
         self.bbox = None
 
     def set_input_cloud(self, pcd: np.array) -> None:
-        """
-        Method to populate the NDT grid given an input point cloud. It is in charge to calculate the
-        cell that each point belongs to and populate each cell.
-
-        Args:
-            pcd (np.array): pointcloud with shape (n_points, 3)
-        """
         x_min_pcd, y_min_pcd, z_min_pcd = np.min(pcd[:, :3], axis=0) - 1
         x_max_pcd, y_max_pcd, z_max_pcd = np.max(pcd[:, :3], axis=0) + 1
 
@@ -191,15 +147,6 @@ class NDT:
                     self.grid[i][j][k].set_points(q)
 
     def get_cell(self, point: np.array) -> Cell:
-        """
-        Returns the cell that point belongs to.
-
-        Args:
-            point (np.array): query point which we want to know the cell
-
-        Returns:
-            Cell: Cell where the point is located.
-        """
         x_min, x_max = self.xlim
         y_min, y_max = self.ylim
         z_min, z_max = self.zlim
@@ -217,19 +164,6 @@ class NDT:
             return None
 
     def align(self, pcd: np.array, init_pose: Pose, max_iterations: int = 100, eps: float = 1e-3) -> Tuple[Pose, List[Tuple[np.array, np.array, float]]]:
-        """
-        Principal method that aligns a given point cloud with the point cloud that was used to populate the NDT grid.
-
-        Args:
-            pcd (np.array): Point cloud to be aligned.
-            init_pose (Pose): Estimated initial pose.
-            max_iterations (int, optional): Maximum number of iterations to calculate the alignment. Defaults to 100.
-            eps (float, optional): Threshold criteria to check if the algorithm has converged to a solution. Defaults to 1e-3.
-
-        Returns:
-            Tuple[Pose, List[Tuple[np.array, np.array, float]]]: - Pose between the point cloud and the map.
-                                                                  - List of [Rotation, translation, score] in each iteration for animation purposes.
-        """
         pose = init_pose
         cache_list = []
         for iteration in range(max_iterations):
@@ -279,18 +213,6 @@ class NDT:
         return delta_T
 
     def gradient_jacobian_point(self, point: np.array, pose: Pose, cell: Cell) -> Tuple[np.array, np.array]:
-        """
-        Helper function to calculate the Jacobian and Hessian for a given point.
-
-        Args:
-            point (np.array): Point used to calculate one summand of the score
-            pose (Pose): current pose.
-            cell (Cell): cell where the point belongs to.
-
-        Returns:
-            Tuple[np.array, np.array]: - delta_gradient: The gradient calculated with the input point
-                                       - delta_H: The Hessian calculated with the given point.
-        """
         mean = cell.mean
         cov = cell.cov
         cov_inv = np.linalg.inv(cov)
@@ -302,16 +224,6 @@ class NDT:
         return delta_gradient, delta_H
 
     def calculate_jacobian(self, point: np.array, pose: Pose) -> np.array:
-        """
-        Calculate the Jacobian of the score given a point and the angle of its pose
-
-        Args:
-            point (np.array): Point used to calculate the Jacobian
-            pose (Pose): current pose.
-
-        Returns:
-            np.array: Calculated Jacobian.
-        """
         x = point[:, 0].item()
         y = point[:, 1].item()
         z = point[:, 2].item()
@@ -332,18 +244,6 @@ class NDT:
         return J
 
     def calculate_hessian(self, point: np.array, pose: Pose, cell: Cell, J: np.array) -> np.array:
-        """
-        Helper function to calculate the Hessian matrix of a given point.
-
-        Args:
-            point (np.array): Point used to calculate part of the Hessian
-            pose (Pose): current pose.
-            cell (Cell): Cell that the point belongs to.
-            J (np.array): Jacobian of the score using the point and pose
-
-        Returns:
-            np.array: Calculated Hessian.
-        """
         x = point[:, 0].item()
         y = point[:, 1].item()
         z = point[:, 2].item()
@@ -366,18 +266,6 @@ class NDT:
         return H
 
     def pos_definite(self, H: np.array, start: float, increment: float, max_iterations=100) -> np.array:
-        """
-        Function to ensure that the Matrix H is positive definite.
-
-        Args:
-            H (np.array): Hessian matrix that is going to be checked
-            start (float): Start lambda that has to be added in case H is not positive definite.
-            increment (float): Increment in lambda for each iteration.
-            max_iterations (int, optional): Maximum amount of iterations to check if H is positive definite. Defaults to 100.
-
-        Returns:
-            np.array: Positive definite Hessian
-        """
         I = np.eye(H.shape[0])
         pos_H = H + start * I
 
@@ -409,18 +297,6 @@ class NDT:
         return score
 
     def compute_step_length(self, T: np.array, source: np.array, pose: Pose, curr_score: float) -> float:
-        """
-        Heuristic way to calculate alpha.
-
-        Args:
-            T (np.array): delta_T obtained with Newton's method.
-            source (np.array): source point cloud
-            pose (Pose): current pose
-            curr_score (float): current score
-
-        Returns:
-            float: obtained alpha
-        """
         source = source[:, :3]
         T = T.copy()
         max_param = max(abs(T[0, 0]), max(abs(T[1, 0]), max(abs(T[2, 0]), max(abs(T[3, 0]), max(abs(T[4, 0]), abs(T[5, 0]))))))
@@ -453,17 +329,6 @@ class NDT:
         return best_alpha * mlength
 
     def adjustment_score(self, alpha: float, T: np.array, source: np.array, pose: Pose) -> float:
-        """
-        Obtained score if we applied a given alpha to update our pose.
-        Args:
-            alpha (float): Tentative alpha
-            T (np.array): Current delta in the parameters
-            source (np.array): Source point cloud.
-            pose (Pose): current pose.
-
-        Returns:
-            float: Obtained score.
-        """
         T = T.copy()
         T *= alpha
         p_cpy = Pose(0, 0, 0, 0, 0, 0)
@@ -481,14 +346,21 @@ class NDT:
         return self.calculate_score(transformed_scan)
 
 
+root_dir = Path(__file__).parents[2]
+map_path = root_dir / "dataset/map.pcd"
+frames_path = root_dir / "dataset/frames"
+ground_truth_path = root_dir / "dataset/ground_truth.csv"
+SAVING_PATH = root_dir / "Project/NDT/"
 
-# # Paths 
-# map_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/map.pcd"
-map_path = "/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/map.pcd"
-# frames_path = "/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/frames"
-frames_path = "/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/frames"
-# ground_truth_path = '/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/dataset/ground_truth.csv'
-ground_truth_path = '/home/hari/Projects/Autonomous_vehicles_ue_3/dataset/ground_truth.csv'
+if not SAVING_PATH.exists():
+    SAVING_PATH.mkdir(parents=True, exist_ok=True)
+    
+map_path = str(map_path)
+frames_path = str(frames_path)
+ground_truth_path = str(ground_truth_path)
+SAVING_PATH = str(SAVING_PATH)
+
+
 
 # Load the point cloud
 map_cloud = o3d.io.read_point_cloud(map_path)
@@ -524,23 +396,15 @@ for i in range(len(ground_truth)):
     frame_cloud_down.transform(transformation_matrix)
     extracted_cars.append(frame_cloud_down)
 
-# Initialize Pose
-init_pose = Pose(0, 0, 0, 0, 0, 0)  # Make a good initial guess
-
-# Create NDT object
-ndt = NDT(15, 15, 15)  # Adjust grid resolution if necessary
-
-# Set input cloud to populate grids
+init_pose = Pose(0, 0, 0, 0, 0, 0)
+ndt = NDT(15, 15, 15)
 target_pcd = np.asarray(map_cloud.points)
 ndt.set_input_cloud(target_pcd)
 
-# Initialize lists for timing and errors
 time_rec = []
 lateral_err = []
 
-# Use pose from the previous iteration as the starting point for the next iteration
 current_pose = init_pose
-
 map_cloud_kdtree = o3d.geometry.KDTreeFlann(map_cloud)
 for i, car_cloud in enumerate(extracted_cars):
     start_time = time.time()
@@ -551,11 +415,9 @@ for i, car_cloud in enumerate(extracted_cars):
     end_time = time.time()
     time_rec.append(end_time - start_time)
 
-    # Transform the source point cloud using the calculated pose
     transformation_matrix = current_pose.get_transformation()
     transformed_points = (transformation_matrix[:3, :3] @ source_pcd[:, :3].T + transformation_matrix[:3, 3].reshape(3, 1)).T
 
-    # Compute the registration error using nearest neighbor distances
     dists = []
     for point in transformed_points:
         [_, idx, dist] = map_cloud_kdtree.search_knn_vector_3d(point, 1)
@@ -566,7 +428,6 @@ for i, car_cloud in enumerate(extracted_cars):
     print('Lateral error is :', reg_error)
     if reg_error > 1.2:
         print(f"Lateral error ({reg_error:.2f} m) is greater than the maximum allowed (1.2 m).")
-        break
 
     print(f"Processed {i + 1}/{len(extracted_cars)} frames.")
 
@@ -584,5 +445,5 @@ o3d.io.write_point_cloud("aligned_car_ndt.pcd", merged_aligned_cars)
 
 # Visualize the results
 import open3d as o3d
-pcd = o3d.io.read_point_cloud("/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/localization/Project/NDT/aligned_car_ndt.pcd")
+pcd = o3d.io.read_point_cloud(SAVING_PATH)
 o3d.visualization.draw_geometries([pcd])
