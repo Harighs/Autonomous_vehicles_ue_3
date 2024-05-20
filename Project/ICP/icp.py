@@ -93,5 +93,5 @@ print(f"-->>  Mean time per frame: {np.mean(time_rec):.2f} s")
 print(f"-->>  Mean lateral error: {np.mean(lateral_err):.2f} m")
 
 # Visualization (Optional)
-pcd = o3d.io.read_point_cloud('/home/ari/Workplace/JKU/SEM_2/Autonomous_sys/Project3/Autonomous_vehicles_ue_3/Project/ICP/aligned_car.pcd')
+pcd = o3d.io.read_point_cloud(str(SAVING_PATH / "aligned_car.pcd"))
 o3d.visualization.draw_geometries([pcd])
