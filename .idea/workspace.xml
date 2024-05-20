@@ -4,12 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="d15ff7e9-137d-4555-ad1a-8b7c85f452a4" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Examples/ICP_localization.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/Examples/ICP_localization.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Examples/Markov_localization.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/Examples/Markov_localization.ipynb" afterDir="false" />
+    <list default="true" id="d15ff7e9-137d-4555-ad1a-8b7c85f452a4" name="Changes" comment="Evaluated version">
       <change beforePath="$PROJECT_DIR$/Project/ICP/icp.py" beforeDir="false" afterPath="$PROJECT_DIR$/Project/ICP/icp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Project/report.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/Project/report.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -79,8 +75,17 @@
       <workItem from="1716151716705" duration="9000" />
       <workItem from="1716195181534" duration="44000" />
       <workItem from="1716196249129" duration="4000" />
-      <workItem from="1716230908742" duration="3241000" />
+      <workItem from="1716230908742" duration="3889000" />
     </task>
+    <task id="LOCAL-00001" summary="Evaluated version">
+      <option name="closed" value="true" />
+      <created>1716236488562</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1716236488562</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -97,7 +102,11 @@
       </map>
     </option>
   </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Evaluated version" />
+    <option name="LAST_COMMIT_MESSAGE" value="Evaluated version" />
+  </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/Autonomous_vehicles_ue_3$icp.coverage" NAME="icp Coverage Results" MODIFIED="1716234525881" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Project/ICP" />
+    <SUITE FILE_PATH="coverage/Autonomous_vehicles_ue_3$icp.coverage" NAME="icp Coverage Results" MODIFIED="1716236941891" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Project/ICP" />
   </component>
 </project>
