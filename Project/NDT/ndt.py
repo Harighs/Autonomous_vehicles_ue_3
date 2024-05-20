@@ -350,7 +350,7 @@ root_dir = Path(__file__).parents[2]
 map_path = root_dir / "dataset/map.pcd"
 frames_path = root_dir / "dataset/frames"
 ground_truth_path = root_dir / "dataset/ground_truth.csv"
-SAVING_PATH = root_dir / "Project/NDT/"
+SAVING_PATH = root_dir / "Project/NDT/aligned_car_ndt.pcd"
 
 if not SAVING_PATH.exists():
     SAVING_PATH.mkdir(parents=True, exist_ok=True)
@@ -439,7 +439,7 @@ print(f"----->>>>>>>>>>  Mean lateral error: {np.mean(lateral_err):.2f} m")
 merged_aligned_cars = o3d.geometry.PointCloud()
 for car_cloud in extracted_cars:
     merged_aligned_cars += car_cloud
-o3d.io.write_point_cloud("aligned_car_ndt.pcd", merged_aligned_cars)
+o3d.io.write_point_cloud(SAVING_PATH, merged_aligned_cars)
 
 
 
