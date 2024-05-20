@@ -5,6 +5,7 @@ Project/ICP/aligned_car.pcd
 
 # all files starts with test_ in the folder NDT
 Project/NDT/test_*
+Project/NDT/help*
 
 .venv
 aligned_car.pcd
