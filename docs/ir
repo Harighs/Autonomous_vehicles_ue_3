@@ -1,0 +1,120 @@
+
+
+---
+
+### **General Mathematical Architecture for Neural Information Retrieval**
+
+1. **Embedding Layer**:
+   Converts queries and documents into dense vector representations.
+
+   - **Mathematics**:
+$$q' = f_q(q), \quad d' = f_d(d)$$
+	 where \( f_q \) and \( f_d \) can be simple dense embeddings (e.g., DSSM), convolutional embeddings (e.g., Conv-KNRM), or transformer-based encoders (e.g., BERT, DPR).
+
+   - **Configuration**:
+     - **DSSM**: Dense layers with ReLU.
+     - **DRMM**: Interaction-focused embeddings.
+     - **NRMs (Conv-KNRM)**: Convolutional layers for n-gram features.
+     - **BERT/DPR**: Pre-trained transformer embeddings.
+
+---
+
+2. **Interaction Layer**:
+   Captures the relationship between query and document embeddings.
+
+   - **Mathematics**:
+$$
+     I_{ij} = \text{Sim}(q'_i, d'_j)
+$$
+     where \( \text{Sim} \) is a similarity function like dot product, cosine similarity, or kernel-based matching.
+
+   - **Configuration**:
+     - **DSSM**: Cosine similarity.
+     - **DRMM**: Interaction histograms for term-level matches.
+     - **NRMs**:
+       - DUET: Combines local (interaction) and distributed (embedding) representations.
+       - Conv-KNRM: Uses kernel pooling to capture soft matches.
+     - **BERT-based Models**: Deep self-attention for token-level contextual interaction.
+     - **Dense Retrieval Models**: Embedding-level similarity (e.g., dot product).
+
+---
+
+3. **Feature Aggregation**:
+   Aggregates interactions into fixed-size features for ranking.
+
+   - **Mathematics**:
+$$
+     h = \text{Aggregate}(I)
+$$
+     Examples of \( \text{Aggregate} \):
+     - Sum, max-pooling, or average-pooling (e.g., DSSM).
+     - Kernel-based pooling for histogram features (e.g., DRMM, Conv-KNRM).
+
+   - **Configuration**:
+     - **DSSM**: Simple pooling over interaction features.
+     - **DRMM**: Histogram aggregation.
+     - **NRMs (Conv-KNRM)**: Multiple kernel pooling for n-gram matches.
+     - **BERT/ColBERT**: Token-wise max similarity aggregation.
+
+---
+
+4. **Scoring Layer**:
+   Produces a relevance score based on the aggregated features.
+
+   - **Mathematics**:
+$$
+     r = \sigma(W h + b)
+$$
+     where \( W \) and \( b \) are learned parameters, and \( \sigma \) is an activation function (e.g., sigmoid for binary relevance or softmax for ranking).
+
+   - **Configuration**:
+     - **DSSM**: Fully connected layer with cosine similarity.
+     - **DRMM**: Multi-layer perceptron (MLP) for scoring.
+     - **NRMs**: Scoring is learned through convolution or attention.
+     - **BERT-based Models**: Use the [CLS] token embedding for scoring.
+     - **Dense Retrieval Models**: Direct dot product of query and document embeddings.
+
+---
+
+5. **Optimization Objective**:
+   Models are trained to optimize a relevance-based loss function.
+
+   - **Mathematics**:
+     - Pairwise loss:
+  $$
+       \mathcal{L}_{\text{pairwise}} = \max(0, 1 - r^+ + r^-)
+  $$
+       where \( r^+ \) and \( r^- \) are scores for relevant and non-relevant documents.
+     - Cross-entropy loss:
+  $$
+       \mathcal{L}_{\text{cross-entropy}} = - \sum_{i=1}^N y_i \log(\hat{y}_i)
+  $$
+       where \( y_i \) is the ground truth, and \( \hat{y}_i \) is the predicted relevance.
+     - Contrastive loss (Dense Retrieval):
+  $$
+       \mathcal{L}_{\text{contrastive}} = -\log\left(\frac{\exp(r^+)}{\exp(r^+) + \sum \exp(r^-)}\right)
+  $$
+
+---
+
+### **Mapping Models to the General Architecture**
+
+| **Component**         | **DSSM**              | **DRMM**              | **NRMs** (e.g., DUET, Conv-KNRM) | **BERT-based Models**    | **Dense Retrieval**       |
+| --------------------- | --------------------- | --------------------- | -------------------------------- | ------------------------ | ------------------------- |
+| **Embedding Layer**   | Dense Embedding (MLP) | Dense Embedding       | CNN-based or Hybrid              | Transformer (BERT)       | Transformer (DPR, etc.)   |
+| **Interaction Layer** | Cosine Similarity     | Term-Level Similarity | Local & Distributed Matching     | Self-Attention           | Dot Product Similarity    |
+| **Aggregation**       | Max/Mean Pooling      | Histograms            | Kernel Pooling                   | Max Similarity (ColBERT) | Global Embedding Matching |
+| **Scoring Layer**     | MLP over Similarity   | MLP over Histogram    | Convolution + Pooling            | Linear Layer on [CLS]    | Dot Product Scoring       |
+| **Optimization**      | Pairwise Loss         | Pairwise/CE Loss      | Pairwise/Kernel Loss             | CE or Contrastive Loss   | Contrastive Loss          |
+
+
+
+
+| **Layer**             | **Purpose**                                                                                           | Formula                                                                                                                                                                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Embedding Layer**   | Transforms input text into dense vector representations capturing semantic meaning.                   | $q' = f_q(q), \quad d' = f_d(d)$                                                                                                                                                                                                                     |
+| **Interaction Layer** | Computes token or term-level relevance between query and document embeddings.                         | $I_{ij} = \text{Sim}(q'_i, d'_j)$                                                                                                                                                                                                                    |
+| **Aggregation**       | Summarizes interaction features into fixed-size representations or vectors.                           | $h = \text{Aggregate}(I)$                                                                                                                                                                                                                            |
+| **Scoring Layer**     | Produces a relevance score that ranks query-document pairs.                                           | $r = \sigma(W h + b)$                                                                                                                                                                                                                                |
+| **Optimization**      | Guides the model's learning process to improve retrieval accuracy using task-specific loss functions. | $\mathcal{L}_{\text{cross-entropy}} = - \sum_{i=1}^N y_i \log(\hat{y}_i)$<br><br>$\mathcal{L}_{\text{pairwise}} = \max(0, 1 - r^+ + r^-)$<br><br>$\mathcal{L}_{\text{contrastive}} = -\log\left(\frac{\exp(r^+)}{\exp(r^+) + \sum \exp(r^-)}\right)$ |
+
